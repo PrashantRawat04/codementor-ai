@@ -34,18 +34,29 @@ export default function App() {
   const [mentorQuery, setMentorQuery] = useState('');
   const [mentorResponse, setMentorResponse] = useState(null);
 
-  const handleRunCode = () => {
+  // Live Backend Code Execution
+  const handleRunCode = async () => {
     setExecuting(true);
-    setTimeout(() => {
-      setExecutionResult({
-        verdict: 'Accepted',
-        runtime: '38.5 ms',
-        memory: '14.8 MB',
-        testCases: '3 / 3 Passed',
-        output: 'Input: nums = [2, 7, 11, 15], target = 9\nOutput: [0, 1]'
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://codementor-ai-backend-qivy.onrender.com';
+      const res = await fetch(`${baseUrl}/api/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, language })
       });
+      const data = await res.json();
+      setExecutionResult(data);
+    } catch (err) {
+      setExecutionResult({
+        verdict: 'Runtime Error',
+        runtime: '0 ms',
+        memory: '0 MB',
+        testCases: '0 / 3 Passed',
+        output: 'Failed to connect to execution server.'
+      });
+    } finally {
       setExecuting(false);
-    }, 850);
+    }
   };
 
   const handleLanguageChange = (e) => {
@@ -60,18 +71,41 @@ export default function App() {
     setHintLevel(level);
   };
 
-  const handleAskMentor = (e) => {
+  // Live Backend Gemini Mentor AI Query
+  const handleAskMentor = async (e) => {
     e.preventDefault();
     if (!mentorQuery.trim()) return;
     setAiLoading(true);
-    setTimeout(() => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://codementor-ai-backend-qivy.onrender.com';
+      const res = await fetch(`${baseUrl}/api/mentor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, query: mentorQuery, apiKey })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMentorResponse({
+          query: mentorQuery,
+          answer: data.answer,
+          ragUsed: true
+        });
+      } else {
+        setMentorResponse({
+          query: mentorQuery,
+          answer: `Error: ${data.detail || 'Failed to fetch AI response.'}`,
+          ragUsed: false
+        });
+      }
+    } catch (err) {
       setMentorResponse({
         query: mentorQuery,
-        answer: "The Hash Map approach stores complements in O(1) time complexity. RAG retrieved: [Hash Maps & Lookups knowledge doc]. Your space complexity is O(N).",
-        ragUsed: true
+        answer: "Error: Please check your network connection or Gemini API key in the top header.",
+        ragUsed: false
       });
+    } finally {
       setAiLoading(false);
-    }, 750);
+    }
   };
 
   return (
@@ -207,274 +241,4 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex-1 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200 overflow-auto">
-                <textarea
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  className="w-full h-full bg-transparent resize-none focus:outline-none font-mono text-slate-200 selection:bg-slate-800"
-                  spellCheck="false"
-                />
-              </div>
-
-              {executionResult && (
-                <div className="border-t border-slate-800 bg-slate-900 p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span className="font-bold text-emerald-400">{executionResult.verdict}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 font-mono gap-3 flex">
-                      <span>Runtime: {executionResult.runtime}</span>
-                      <span>Memory: {executionResult.memory}</span>
-                    </div>
-                  </div>
-                  <pre className="bg-slate-950 p-2 rounded text-[11px] font-mono text-slate-300 border border-slate-800">
-                    {executionResult.output}
-                  </pre>
-                </div>
-              )}
-            </div>
-
-            {/* AI MENTOR PANEL (4 Cols) */}
-            <div className="lg:col-span-4 bg-slate-900 rounded-xl border border-slate-800 flex flex-col overflow-hidden">
-              <div className="p-2 border-b border-slate-800 bg-slate-950 flex items-center gap-1">
-                {[
-                  { id: 'hints', label: 'Progressive Hints', icon: Sparkles },
-                  { id: 'review', label: 'Code Review', icon: Code2 },
-                  { id: 'rag_explain', label: 'RAG Context', icon: Database }
-                ].map((t) => {
-                  const Icon = t.icon;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => setMentorTab(t.id)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-[11px] font-medium transition-all ${
-                        mentorTab === t.id
-                          ? 'bg-slate-800 text-amber-400 border border-slate-700'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
-                {mentorTab === 'hints' && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center bg-slate-950 p-2 rounded border border-slate-800">
-                      <span className="text-[11px] text-slate-400">Progressive Hint Level:</span>
-                      <div className="flex gap-1">
-                        {[1, 2, 3, 4].map((lvl) => (
-                          <button
-                            key={lvl}
-                            onClick={() => handleGetHint(lvl)}
-                            className={`w-6 h-6 rounded text-[11px] font-bold transition-all ${
-                              hintLevel === lvl
-                                ? 'bg-amber-500 text-slate-950'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            }`}
-                          >
-                            L{lvl}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg space-y-2">
-                      <div className="flex items-center gap-2 text-amber-400 font-semibold">
-                        <Sparkles className="w-4 h-4" />
-                        <span>
-                          {hintLevel === 1 && 'Level 1: Problem Intuition'}
-                          {hintLevel === 2 && 'Level 2: Strategy Guidance'}
-                          {hintLevel === 3 && 'Level 3: Edge Case Guardrail'}
-                          {hintLevel === 4 && 'Level 4: Complete Solution Breakdown'}
-                        </span>
-                      </div>
-                      <p className="text-slate-300 leading-relaxed text-[11px]">
-                        {hintLevel === 1 && 'Utilize a data structure that allows O(1) average lookup times instead of quadratic nested iterations.'}
-                        {hintLevel === 2 && 'Iterate through `nums`. For element `x`, search for complement `target - x` in a Hash Map.'}
-                        {hintLevel === 3 && 'Ensure you store array indices, and do not reuse the exact same array element twice.'}
-                        {hintLevel === 4 && 'Initialize `seen = {}`. For `(i, num)`: check `if (target - num) in seen`. Else store `seen[num] = i`.'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {mentorTab === 'review' && (
-                  <div className="space-y-3 text-[11px]">
-                    <div className="p-3 bg-emerald-950/40 border border-emerald-800/50 rounded-lg space-y-1">
-                      <span className="font-bold text-emerald-400">Time Complexity Analysis</span>
-                      <p className="text-slate-300">Optimal O(N) achieved via single-pass hash table insertion.</p>
-                    </div>
-                    <div className="p-3 bg-indigo-950/40 border border-indigo-800/50 rounded-lg space-y-1">
-                      <span className="font-bold text-indigo-400">Space Complexity</span>
-                      <p className="text-slate-300">O(N) space for storing up to N entries in dictionary.</p>
-                    </div>
-                  </div>
-                )}
-
-                {mentorTab === 'rag_explain' && (
-                  <div className="space-y-3">
-                    <form onSubmit={handleAskMentor} className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Ask RAG-grounded concept..."
-                        value={mentorQuery}
-                        onChange={(e) => setMentorQuery(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs focus:outline-none text-slate-200"
-                      />
-                      <button type="submit" className="bg-amber-500 text-slate-950 px-3 py-1.5 rounded font-bold hover:bg-amber-400">
-                        <Send className="w-3.5 h-3.5" />
-                      </button>
-                    </form>
-                    {mentorResponse && (
-                      <div className="p-3 bg-slate-950 border border-slate-800 rounded text-[11px] text-slate-300 space-y-2">
-                        <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
-                          <Database className="w-3.5 h-3.5" />
-                          <span>RAG Retrieved Knowledge Context</span>
-                        </div>
-                        <p>{mentorResponse.answer}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* RAG INSPECTOR TAB */}
-        {activeTab === 'rag' && (
-          <div className="space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-              <h2 className="text-lg font-bold text-slate-100 mb-2 flex items-center gap-2">
-                <Database className="w-5 h-5 text-amber-400" />
-                RAG Knowledge Retrieval Pipeline (FAISS + BGE Embeddings)
-              </h2>
-              <p className="text-xs text-slate-400 mb-6">
-                Demonstrating document chunking, vector indexing, and context augmentation prior to model prompt completion.
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-2">
-                  <h4 className="text-xs font-bold text-amber-400 uppercase">Knowledge Base Ingestion</h4>
-                  <p className="text-xs text-slate-300 font-mono">Doc #1: Two Pointer & Hash Map Optimization</p>
-                  <p className="text-xs text-slate-400">Embedding Model: BAAI/bge-small-en-v1.5 (384 dimensions)</p>
-                </div>
-                <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-2">
-                  <h4 className="text-xs font-bold text-emerald-400 uppercase">FAISS Similarity Match</h4>
-                  <p className="text-xs text-slate-300 font-mono">Cosine Similarity Score: 0.9412</p>
-                  <p className="text-xs text-slate-400">Retrieved chunks injected into LLM system prompt context.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* EVALUATION BENCHMARK TAB */}
-        {activeTab === 'evaluation' && (
-          <div className="space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-              <h2 className="text-lg font-bold text-slate-100 mb-2 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-amber-400" />
-                Major Project Experimental Research: RAG vs Non-RAG Baseline
-              </h2>
-              <p className="text-xs text-slate-400 mb-6">
-                Quantitative metrics comparing RAG-grounded responses vs general-purpose non-retrieval LLM baseline.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                  { label: 'Response Relevancy', rag: '94.2%', baseline: '78.5%', delta: '+15.7%' },
-                  { label: 'Factual Correctness', rag: '96.8%', baseline: '81.2%', delta: '+15.6%' },
-                  { label: 'Hallucination Rate', rag: '3.1%', baseline: '24.8%', delta: '-21.7%' },
-                  { label: 'Hint Usefulness', rag: '4.8 / 5', baseline: '3.2 / 5', delta: '+1.6 pts' }
-                ].map((metric, idx) => (
-                  <div key={idx} className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-2">
-                    <span className="text-xs text-slate-400">{metric.label}</span>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xl font-extrabold text-amber-400">{metric.rag}</span>
-                      <span className="text-xs text-slate-500 line-through">{metric.baseline}</span>
-                    </div>
-                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
-                      Delta: {metric.delta}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ROADMAP TAB */}
-        {activeTab === 'roadmap' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-              <Compass className="w-5 h-5 text-amber-400" />
-              Personalized Learning & Recommendation Pathway
-            </h2>
-            <p className="text-xs text-slate-400">Identified Weak Areas: Dynamic Programming & Graphs</p>
-            <div className="space-y-3">
-              <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg flex justify-between items-center">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-200">Recommended: Coin Change</h4>
-                  <p className="text-xs text-slate-400">Topic: Dynamic Programming | Difficulty: Medium</p>
-                </div>
-                <span className="text-xs font-semibold px-3 py-1 bg-amber-500 text-slate-950 rounded-full">+15% DP Mastery</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* LEADERBOARD TAB */}
-        {activeTab === 'leaderboard' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-400" />
-              Graphic Era Hill University - CSE Leaderboard
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-300">
-                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
-                  <tr>
-                    <th className="p-3">Rank</th>
-                    <th className="p-3">Student Name</th>
-                    <th className="p-3">Roll Number</th>
-                    <th className="p-3">Problems Solved</th>
-                    <th className="p-3">Streak</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  <tr className="hover:bg-slate-800/50">
-                    <td className="p-3 font-bold text-amber-400">#1</td>
-                    <td className="p-3 font-semibold text-slate-100">Prashant Rawat</td>
-                    <td className="p-3 font-mono text-slate-400">2319255</td>
-                    <td className="p-3">48</td>
-                    <td className="p-3 text-emerald-400 font-bold">12 Days 🔥</td>
-                  </tr>
-                  <tr className="hover:bg-slate-800/50">
-                    <td className="p-3 font-bold text-slate-300">#2</td>
-                    <td className="p-3 font-semibold text-slate-100">Ravi Prakash</td>
-                    <td className="p-3 font-mono text-slate-400">2219417</td>
-                    <td className="p-3">42</td>
-                    <td className="p-3 text-emerald-400 font-bold">9 Days 🔥</td>
-                  </tr>
-                  <tr className="hover:bg-slate-800/50">
-                    <td className="p-3 font-bold text-slate-300">#3</td>
-                    <td className="p-3 font-semibold text-slate-100">Himanshu Negi</td>
-                    <td className="p-3 font-mono text-slate-400">2318873</td>
-                    <td className="p-3">39</td>
-                    <td className="p-3 text-emerald-400 font-bold">7 Days 🔥</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
+              <div className="flex-1 bg-slate-950 p-4 font-mono text-xs leading-relaxed
